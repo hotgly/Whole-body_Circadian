@@ -1,0 +1,10 @@
+Abel lab notebook / notes
+
+4/1
+Finished writing the data imports. Next up we need to get the data processed in some manner. A first guess would be:
+-LSP for all.
+-Detrending for r/g/t/h
+-Eigendecomposition for r/g/t/h
+-Sine fitting for r/g/t/h
+-Wavelet for r/g/t/h
+- Try same for activity but I doubt it works. Might need another method.

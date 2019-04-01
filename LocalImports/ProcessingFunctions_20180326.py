@@ -58,7 +58,7 @@ def load_imagej_file(input_data, raw_signal, raw_xy, color, input_ij_extension=N
     locations. input_ij_extension can be set manually, defaults to last
     four characters of input_data.
     """
-    print("Assembling data from imageJ recording... time: ", end=' ')
+    print("Assembling data from imageJ recording... time: ")
     if input_ij_extension is None:
         input_ij_extension = input_data[-4:]
     timer = plo.laptimer()
@@ -144,7 +144,7 @@ def load_imagej_file(input_data, raw_signal, raw_xy, color, input_ij_extension=N
 def import_data(raw_signal, raw_xy):
     timer = plo.laptimer()
 
-    print("Importing data... time: ", end=' ')
+    print("Importing data... time: ")
     header = np.genfromtxt(raw_signal, delimiter=',')[0, :]
     raw_times = np.genfromtxt(raw_signal, delimiter=',')[1:, 0]
     raw_data = np.genfromtxt(raw_signal, delimiter=',')[1:, 2:]
@@ -278,7 +278,7 @@ def hp_detrend(times, interpolated_data):
     of 24h.
     """
     timer = plo.laptimer()
-    print("Detrending data... time: ", end=' ')
+    print("Detrending data... time: ")
     detrended_data = np.zeros(interpolated_data.shape)
     trendlines = np.zeros(interpolated_data.shape)
     for idx,idata in enumerate(interpolated_data.T):
@@ -306,7 +306,7 @@ def butterworth_lowpass(times, data, cutoff_period=4):
     Does a Butterworth low pass filtering of the data.
     """
     timer = plo.laptimer()
-    print("Butterworth filter... time: ", end=' ')
+    print("Butterworth filter... time: ")
     denoised_data = np.zeros(data.shape)
     for idx in range(len(data.T)):
         # copy data for editing
@@ -327,7 +327,7 @@ def LS_pgram(times, ls_data, circ_low=18, circ_high=30, alpha=0.05):
     peak is in the circadian range as specified by the args, it is
     rhythmic."""
     timer = plo.laptimer()
-    print("Lomb-Scargle Periodogram... time: ", end=' ')
+    print("Lomb-Scargle Periodogram... time: ")
     rhythmic_or_not = np.zeros(len(ls_data.T))
     pgram_data = np.zeros((300,len(ls_data.T)))
     circadian_peaks = np.zeros(len(ls_data.T))
@@ -371,7 +371,7 @@ def eigensmooth(times, detrended_data, ev_threshold=0.05, dim=40, min_ev=2):
     http://www.visiondummy.com/2014/04/geometric-interpretation-covariance-matrix/
     """
     timer = plo.laptimer()
-    print("Eigendecomposition... time: ", end=' ')
+    print("Eigendecomposition... time: ")
 
     #set up results - by default set to NaNs
     denoised_data = np.nan*np.ones(detrended_data.shape)
@@ -436,7 +436,7 @@ def sinusoidal_fitting(times, data, rhythmic_or_not, fit_times=None,
     period.
     """
     timer = plo.laptimer()
-    print("Sinusoidal fitting... time: ", end=' ')
+    print("Sinusoidal fitting... time: ")
 
     if fit_times is None:
         fit_times = np.copy(times)
