@@ -160,3 +160,48 @@ plt.legend()
 
 # and finally the feeding
 feeding_file =['Feeder_YS_022819_ALB_F097'] #txt format
+
+
+
+
+
+# repeat exact way with new class 
+from LocalImports import WholeBodyRecording as wbr
+reload(wbr)
+
+m1g_file = input_folder+'031219_pump_light_green_liver.xls'
+m1r_file = input_folder+'031219_pump_light_red_body.xls'
+mouse1 = wbr.WholeBodyRecording(m1r_file, m1g_file, imaging_start, imaging_interval)
+
+# cut the light intervals
+intervals_1 = []
+for day in [12,13,14,15,16,17,18]:
+    dd = str(day)
+    intervals_1 = intervals_1 + [# 12 pulses per day
+                 ['2019-03-'+dd+' 07:52:00', '2019-03-'+dd+' 08:24:00'],
+                 ['2019-03-'+dd+' 08:52:00', '2019-03-'+dd+' 09:24:00'],
+                 ['2019-03-'+dd+' 09:52:00', '2019-03-'+dd+' 10:24:00'],
+                 ['2019-03-'+dd+' 10:52:00', '2019-03-'+dd+' 11:24:00'],
+                 ['2019-03-'+dd+' 11:52:00', '2019-03-'+dd+' 12:24:00'],
+                 ['2019-03-'+dd+' 12:52:00', '2019-03-'+dd+' 13:24:00'],
+                 ['2019-03-'+dd+' 13:52:00', '2019-03-'+dd+' 14:24:00'],
+                 ['2019-03-'+dd+' 14:52:00', '2019-03-'+dd+' 15:24:00'],
+                 ['2019-03-'+dd+' 15:52:00', '2019-03-'+dd+' 16:24:00'],
+                 ['2019-03-'+dd+' 16:52:00', '2019-03-'+dd+' 17:24:00'],
+                 ['2019-03-'+dd+' 17:52:00', '2019-03-'+dd+' 18:24:00'],
+                 ['2019-03-'+dd+' 18:52:00', '2019-03-'+dd+' 19:24:00']
+                 ]
+
+for day in [19,20,21,22,23,24]:
+    dd = str(day)
+    intervals_1 = intervals_1 +[# 4 pulses per day
+                 ['2019-03-'+dd+' 07:44:00', '2019-03-'+dd+' 08:32:00'],
+                 ['2019-03-'+dd+' 10:44:00', '2019-03-'+dd+' 11:32:00'],
+                 ['2019-03-'+dd+' 13:44:00', '2019-03-'+dd+' 14:32:00'],
+                 ['2019-03-'+dd+' 16:44:00', '2019-03-'+dd+' 17:32:00']
+                 ]
+
+# now will this work?
+mouse1.excise_imaging_times(intervals_1, cooldown_ext=5)
+# yes
+
