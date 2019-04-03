@@ -205,3 +205,41 @@ for day in [19,20,21,22,23,24]:
 mouse1.excise_imaging_times(intervals_1, cooldown_ext=5)
 # yes
 
+# and the TH file?
+mouse1.import_temperature_humidity(input_folder+
+                    '190301_P2R2GALBWT_Temperature_humidity.xls')
+
+# and the activity
+mouse1.import_actogram(input_folder+
+                '190301_ALB_P2R2G_homo_water_Actogram_Graph Data.csv')
+
+# try the hp detrend
+mouse1.process_imaging_data('xr','ryr','gyr')
+
+
+# HP filter
+plt.figure()
+plt.plot(mouse1.imaging['xr_hp'], mouse1.imaging['ryr'], color='red', 
+         label= 'red')
+plt.plot(mouse1.imaging['xr_hp'], mouse1.imaging['ryr_hp'], color='maroon', 
+         label= 'red hp')
+plt.plot(mouse1.imaging['xr_hp'], mouse1.imaging['ryr_hpb'], color='maroon', 
+         label= 'red hp baseline', ls=':')
+plt.plot(mouse1.imaging['xr_es'], mouse1.imaging['ryr_es'], color='k', 
+         label= 'red hp denoise')
+plt.plot(mouse1.imaging['xr_b'], mouse1.imaging['ryr_b'], color='k', ls=':',
+         label= 'red hp butter')
+plt.legend()
+
+plt.figure()
+plt.plot(mouse1.imaging['xr_hp'], mouse1.imaging['gyr'], color='green', 
+         label= 'green', ls=':')
+plt.plot(mouse1.imaging['xr_hp'], mouse1.imaging['gyr_hp'], color='gold', 
+         label= 'green hp')
+plt.plot(mouse1.imaging['xr_hp'], mouse1.imaging['gyr_hpb'], color='gold', 
+         label= 'green hp baseline', ls=':')
+plt.plot(mouse1.imaging['xr_es'], mouse1.imaging['gyr_es'], color='k', 
+         label= 'green hp denoise')
+plt.plot(mouse1.imaging['xr_b'], mouse1.imaging['gyr_b'], color='k', ls=':',
+         label= 'green hp butter')
+plt.legend()
