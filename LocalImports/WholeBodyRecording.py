@@ -5,7 +5,7 @@ Created on Wed Dec 12 2017
 @author: john abel
 Module set up to perform analysis for Yongli Shan.
 """
-
+from __future__ import division
 
 import numpy  as np
 import pandas as pd
@@ -27,8 +27,7 @@ class WholeBodyRecording(object):
     Class to analyze time series data for whole body PER2iLuc recordings.
     """
 
-    def __init__(self, red_file, green_file, imaging_start, imaging_interval,
-                    name=None):
+    def __init__(self, red_file, green_file, imaging_start, imaging_interval, name=None):
         """
         Parameters
         ----------
@@ -147,10 +146,15 @@ class WholeBodyRecording(object):
         tempr = np.array(TH_pd['temp'], dtype=np.float)[idx:]
         humr = np.array(TH_pd['humidity'], dtype=np.float)[idx:]
 
+        interval = xthr[1]-xthr[0]
+        offset = xthr[0]-imgstart
+
         TH = {}
         TH['temp'] = tempr
         TH['hum'] = humr
         TH['x'] = xthr
+        TH['interval_h'] = interval.total_seconds()/60/60
+        TH['offset_h'] = offset.total_seconds()/60/60
         self.TH = TH
 
     def import_actogram(self, filename, start_time='imaging', actogram_interval=1):
@@ -181,31 +185,45 @@ class WholeBodyRecording(object):
         # assemble all the columns
         intervals = int(60/actogram_interval*24)*total_days
         xa = pd.date_range(act_start, periods=intervals, freq=str(actogram_interval)+' min')
-        activity = np.array(
+        activ = np.array(
                     act_pd.iloc[np.arange(8,8+(60/actogram_interval*24)),
                     np.arange(1,1+total_days)], dtype=np.float
                              ).flatten('F')
         idx = np.where(xa>=imgstart)[0][0]
         xar = xa[idx:]
-        actr = activity[idx:]
+        actr = activ[idx:]
+        offset = xar[0] - imgstart
 
-        actogram = {}
-        actogram['x'] = xar
-        actogram['activity'] = actr
-        self.actogram = actogram
+        # remove nans
+        xar = xar[~np.isnan(actr)]
+        actr = actr[~np.isnan(actr)]
 
-    def process_imaging_data(self, xname, redname, greenname):
+        activity = {}
+        activity['x'] = xar
+        activity['activity'] = actr
+        activity['interval_h'] = actogram_interval/60
+        activity['offset_h'] = offset.total_seconds()/60/60
+        self.activity = activity
+
+
+    def process_imaging_data(self, xname, redname, greenname, lsperiod_fit=False):
         """
         Performs the analysis of the PER2iLuc data. The xname, redname, 
         greenname arguments tell which of the dict to look at.
+
+        If lsperiod_fit, bounds the resulting sinusoid to have a 
+        period within 1h of LSPgram.
         """
         x = self.imaging[xname]
         red = self.imaging[redname]
         green = self.imaging[greenname]
 
         # convert interval into float
-        interval_float = np.float(self.imaging_interval.split()[0])
-        times = np.arange(len(red))*interval_float/60 # I think
+        timediffs = [x[i+1]-x[i] for i in range(len(x)-1)]
+        timediffs_h = [td.total_seconds()/60/60 for td in timediffs]
+        times = np.hstack([0,np.cumsum(timediffs_h)])
+        # save times that relate to other measurements
+        self.imaging[xname+'_UT']  = times
 
         hpt, hp_red, hp_redb = hp_detrend(times, red)
         hpt, hp_green, hp_greenb = hp_detrend(times, green)
@@ -214,23 +232,265 @@ class WholeBodyRecording(object):
         self.imaging[greenname+'_hp'] = hp_green
         self.imaging[redname+'_hpb'] = hp_redb
         self.imaging[greenname+'_hpb'] = hp_greenb
-        self.imaging[xname+'_hp'] = hpt
+        
+        # Use LSPgram to confirm rhythmic or not
+        red_pgram = circadian_LSPgram(hpt, hp_red, circ_low=18, 
+                                      circ_high=30, alpha=0.05)
+        green_pgram = circadian_LSPgram(hpt, hp_green, circ_low=18, 
+                                      circ_high=30, alpha=0.05)
+        try:
+            self.periodogram['red'] = red_pgram
+            self.periodogram['green'] = green_pgram
+        except AttributeError:
+            self.periodogram = {}
+            self.periodogram['red'] = red_pgram
+            self.periodogram['green'] = green_pgram            
 
         # now the eigensmooth
         et, ered, evalred = eigensmooth(hpt, hp_red)
         et, egreen, evalgreen = eigensmooth(hpt, hp_green)
 
-        self.imaging[xname+'_es'] = et
         self.imaging[redname+'_es'] = ered
         self.imaging[greenname+'_es'] = egreen
 
-        # what about a butter smooth
-        bt, bred = butterworth_lowpass(hpt, hp_red)
-        bt, bgreen = butterworth_lowpass(hpt, hp_green)
+        # fit the data with the polynomial+sinusoid
+        # note we are not using model averaging, we are
+        # just taking the single best model by AICc
+        rmod = ds.DecayingSinusoid(et, ered)
+        gmod = ds.DecayingSinusoid(et, egreen)
 
-        self.imaging[xname+'_b'] = bt
-        self.imaging[redname+'_b'] = bred
-        self.imaging[greenname+'_b'] = bgreen
+        # if no estimate is given just do the normal fitting
+        # if an estimate is given, bound the period within 1h
+        rmod.run()
+        rparams = rmod.best_model.result.params
+        gmod.run()
+        gparams = gmod.best_model.result.params
+
+        if lsperiod_fit:
+            # only use force if necessary
+            if np.abs(rparams['period'].value-red_pgram['period']) >1:
+                # force is necessary
+                rmod._estimate_parameters()
+                rmod._fit_models(period_force=red_pgram['period'])
+                rmod._calculate_averaged_parameters()
+                rparams = rmod.best_model.result.params
+            if np.abs(gparams['period'].value-green_pgram['period']) >1:
+                # force is necessary
+                gmod._estimate_parameters()
+                gmod._fit_models(period_force=green_pgram['period'])
+                gmod._calculate_averaged_parameters()
+                gparams = gmod.best_model.result.params
+        # put the sine fit data in the sine_data matrix,
+        # and same for phase
+        # export all phases for heatmap, and other data for rhythmic cells only
+        rphases = (et*2*np.pi/rparams['period']+rparams['phase'])%(2*np.pi)
+        gphases = (et*2*np.pi/gparams['period']+gparams['phase'])%(2*np.pi)
+
+        try:
+            self.sinusoids
+        except AttributeError:
+            self.sinusoids = {}
+
+        if red_pgram['rhythmic']:
+            red_sin = {}
+            red_sin['ts'] = et
+            red_sin['phase_data'] = (et*2*np.pi/rparams['period']+rparams['phase'])%(2*np.pi)
+            red_sin['sine_data'] = ds.sinusoid_component(rparams, et)
+            # summary stats
+            red_sin['pseudo_r2'] = rmod.best_model._calc_r2()
+            red_sin['params'] = rparams
+            self.sinusoids['red'] = red_sin
+        if green_pgram['rhythmic']:
+            green_sin = {}
+            green_sin['ts'] = et
+            green_sin['phase_data'] = (et*2*np.pi/gparams['period']+gparams['phase'])%(2*np.pi)
+            green_sin['sine_data'] = ds.sinusoid_component(gparams, et)
+            # summary stats
+            green_sin['pseudo_r2'] = gmod.best_model._calc_r2()
+            green_sin['params'] = gparams
+            self.sinusoids['green'] = green_sin
+
+
+    def process_temp_hum_data(self, xname='x', tempname='temp', humname='hum', lsperiod_fit=False):
+        """
+        Performs the analysis of the temperature and humidity data. The xname, tempname, 
+        humname arguments tell which of the dict to look at.
+
+        If lsperiod_fit, bounds the resulting sinusoid to have a 
+        period within 1h of LSPgram.
+        """
+        x = self.TH[xname]
+        temp = self.TH[tempname]
+        hum = self.TH[humname]
+
+        # convert interval into float
+        interval_float = self.TH['interval_h']
+        times = np.arange(len(x))*interval_float+self.TH['offset_h'] # I think
+        self.TH[xname+'_UT'] = times
+
+        hpt, hp_temp, hp_tempb = hp_detrend(times, temp)
+        hpt, hp_hum, hp_humb = hp_detrend(times, hum)
+
+        self.TH[tempname+'_hp'] = hp_temp
+        self.TH[humname+'_hp'] = hp_hum
+        self.TH[tempname+'_hpb'] = hp_tempb
+        self.TH[humname+'_hpb'] = hp_humb
+
+        
+        # Use LSPgram to confirm rhythmic or not
+        temp_pgram = circadian_LSPgram(hpt, hp_temp, circ_low=18, 
+                                      circ_high=30, alpha=0.05)
+        hum_pgram = circadian_LSPgram(hpt, hp_hum, circ_low=18, 
+                                      circ_high=30, alpha=0.05)
+        try:
+            self.periodogram['temp'] = temp_pgram
+            self.periodogram['hum'] = hum_pgram
+        except AttributeError:
+            self.periodogram = {}
+            self.periodogram['temp'] = temp_pgram
+            self.periodogram['hum'] = hum_pgram            
+
+        # now the eigensmooth
+        et, etemp, evaltemp = eigensmooth(hpt, hp_temp)
+        et, ehum, evalhum = eigensmooth(hpt, hp_hum)
+
+        self.TH[xname+'_es'] = et
+        self.TH[tempname+'_es'] = etemp
+        self.TH[humname+'_es'] = ehum
+
+        # fit the data with the polynomial+sinusoid
+        # note we are not using model averaging, we are
+        # just taking the single best model by AICc
+        rmod = ds.DecayingSinusoid(et, etemp)
+        gmod = ds.DecayingSinusoid(et, ehum)
+
+        # if no estimate is given just do the normal fitting
+        # if an estimate is given, bound the period within 1h
+        rmod.run()
+        rparams = rmod.best_model.result.params
+        gmod.run()
+        gparams = rmod.best_model.result.params
+
+        if lsperiod_fit:
+            # only use force if necessary
+            if np.abs(rparams['period'].value-temp_pgram['period']) >1:
+                # force is necessary
+                rmod._estimate_parameters()
+                rmod._fit_models(period_force=temp_pgram['period'])
+                rmod._calculate_averaged_parameters()
+                rparams = rmod.best_model.result.params
+            if np.abs(gparams['period'].value-hum_pgram['period']) >1:
+                # force is necessary
+                gmod._estimate_parameters()
+                gmod._fit_models(period_force=hum_pgram['period'])
+                gmod._calculate_averaged_parameters()
+                gparams = gmod.best_model.result.params
+        # put the sine fit data in the sine_data matrix,
+        # and same for phase
+        # export all phases for heatmap, and other data for rhythmic cells only
+        rphases = (et*2*np.pi/rparams['period']+rparams['phase'])%(2*np.pi)
+        gphases = (et*2*np.pi/gparams['period']+gparams['phase'])%(2*np.pi)
+
+        try:
+            self.sinusoids
+        except AttributeError:
+            self.sinusoids = {}
+
+        if temp_pgram['rhythmic']:
+            temp_sin = {}
+            temp_sin['ts'] = et
+            temp_sin['phase_data'] = (et*2*np.pi/rparams['period']+rparams['phase'])%(2*np.pi)
+            temp_sin['sine_data'] = ds.sinusoid_component(rparams, et)
+            # summary stats
+            temp_sin['pseudo_r2'] = rmod.best_model._calc_r2()
+            temp_sin['params'] = rparams
+            self.sinusoids['temp'] = temp_sin
+        if hum_pgram['rhythmic']:
+            hum_sin = {}
+            hum_sin['ts'] = et
+            hum_sin['phase_data'] = (et*2*np.pi/gparams['period']+gparams['phase'])%(2*np.pi)
+            hum_sin['sine_data'] = ds.sinusoid_component(gparams, et)
+            # summary stats
+            hum_sin['pseudo_r2'] = gmod.best_model._calc_r2()
+            hum_sin['params'] = gparams
+            self.sinusoids['hum'] = hum_sin
+
+    def process_activity_data(self, xname='x', actname='activity', lsperiod_fit=False):
+        """
+        Performs the analysis of the activity data. The xname, actname
+        arguments tell which of the dict to look at.
+
+        If lsperiod_fit, bounds the resulting sinusoid to have a 
+        period within 1h of LSPgram.
+        """
+        x = self.activity[xname]
+        act = self.activity[actname]
+
+        # convert interval into float
+        timediffs = [x[i+1]-x[i] for i in range(len(x)-1)]
+        timediffs_h = [td.total_seconds()/60/60 for td in timediffs]
+        times = np.hstack([0,np.cumsum(timediffs_h)]) +self.activity['offset_h']
+        self.activity[xname+'_UT'] = times
+
+        actb = np.mean(act)
+        act_zero = act-actb
+
+        self.activity[actname+'_zero'] = act_zero
+        self.activity[actname+'_mean'] = actb
+        
+        # Use LSPgram to confirm rhythmic or not
+        act_pgram = circadian_LSPgram(times, act_zero, circ_low=18, 
+                                      circ_high=30, alpha=0.05)
+        try:
+            self.periodogram['act'] = act_pgram
+        except AttributeError:
+            self.periodogram = {}
+            self.periodogram['act'] = act_pgram
+
+        # now the eigensmooth
+        et, eact, evalact = eigensmooth(times, act_zero)
+
+        self.activity[xname+'_es'] = et
+        self.activity[actname+'_es'] = eact
+
+        # fit the data with the polynomial+sinusoid
+        # note we are not using model averaging, we are
+        # just taking the single best model by AICc
+        rmod = ds.DecayingSinusoid(et, eact)
+
+        # if no estimate is given just do the normal fitting
+        # if an estimate is given, bound the period within 1h
+        rmod.run()
+        rparams = rmod.best_model.result.params
+
+        if lsperiod_fit:
+            # only use force if necessary
+            if np.abs(rparams['period'].value-act_pgram['period']) >1:
+                # force is necessary
+                rmod._estimate_parameters()
+                rmod._fit_models(period_force=act_pgram['period'])
+                rmod._calculate_averaged_parameters()
+                rparams = rmod.best_model.result.params
+
+        # put the sine fit data in the sine_data matrix,
+        # and same for phase
+        # export all phases for heatmap, and other data for rhythmic cells only
+        rphases = (et*2*np.pi/rparams['period']+rparams['phase'])%(2*np.pi)
+
+        try:
+            self.sinusoids
+        except AttributeError:
+            self.sinusoids = {}
+
+        if act_pgram['rhythmic']:
+            act_sin = {}
+            act_sin['ts'] = et
+            act_sin['phase_data'] = (et*2*np.pi/rparams['period']+rparams['phase'])%(2*np.pi)
+            act_sin['sine_data'] = ds.sinusoid_component(rparams, et)
+            # summary stats
+            act_sin['pseudo_r2'] = rmod.best_model._calc_r2()
+            act_sin['params'] = rparams
+            self.sinusoids['act'] = act_sin
 
 # functions
 
@@ -371,3 +631,55 @@ def butterworth_lowpass(x, y, cutoff_period=8., order=10):
     y_filt = signal.filtfilt(b, a, y)
 
     return x, y_filt
+
+def circadian_LSPgram(times, data, circ_low=18, circ_high=30, alpha=0.05):
+    """Calculates a LS periodogram for each data sequence,
+    and returns the p-values for each peak. If the largest significant
+    peak is in the circadian range as specified by the args, it is
+    rhythmic."""
+
+    t1 = np.copy(times[~np.isnan(data)])
+    d1 = np.copy(data[~np.isnan(data)])
+    pers, pgram, sig = blu.periodogram(t1, d1, period_low=1,
+                    period_high=60, res=300)
+    peak = np.argmax(pgram)
+
+    if (pers[peak] >= circ_low and pers[peak] <= circ_high and
+                                                sig[peak] <=alpha):
+        rhythmic_or_not = 1
+        #
+        circadian_peak = pgram[peak]
+        circadian_peak_period = pers[peak]
+    else:
+        minpeak = np.argmax(pers>=circ_low)
+        maxpeak = np.argmin(pers<circ_high)
+        circadian_peak = np.max(pgram[minpeak:maxpeak])
+        circadian_peak_period =\
+            pers[minpeak:maxpeak][np.argmax(pgram[minpeak:maxpeak])]
+
+    periodogram = {}
+    periodogram['pers'] = pers
+    periodogram['pgram'] = pgram
+    periodogram['circadian_peak'] = circadian_peak
+    periodogram['rhythmic'] = rhythmic_or_not
+    periodogram['period'] = circadian_peak_period
+    return periodogram
+
+def periodogram(x, y, period_low=1, period_high=60, res=200):
+    """ calculate the periodogram at the specified frequencies, return
+    periods, pgram """
+
+    periods = np.linspace(period_low, period_high, res)
+    # periods = np.logspace(np.log10(period_low), np.log10(period_high),
+    #                       res)
+    freqs = 2*np.pi/periods
+    pgram = signal.lombscargle(x, y, freqs, precenter=True)
+
+    # significance (see press 1994 numerical recipes, p576)
+    var = np.var(y)
+    pgram_norm_press = pgram/var
+    significance =  1-(1-np.exp(-pgram_norm_press))**len(x)
+
+    #take the normalized power
+    pgram_norm = pgram *2 / (len(x) * var)
+    return periods, pgram_norm, significance

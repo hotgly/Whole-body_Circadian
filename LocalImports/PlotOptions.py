@@ -8,7 +8,7 @@
 # >>> *** make plots here ***
 # >>> fig.tight_layout(**layout_pad)
 
-
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
@@ -46,6 +46,8 @@ def PlotOptions(uselatex=False, ticks='out'):
             'dotted': (0, (0.25, 1.50)),
         }
 
+
+    # PhD COLORMAP
     # colors: 377EB8, E41A1C, 4DAF4A, 984EA3, FF7F00, FFFF33, A65628, F781BF
     #medium darkness
     matplotlib.colors.ColorConverter.colors['f'] = \
@@ -58,7 +60,6 @@ def PlotOptions(uselatex=False, ticks='out'):
             (152/255, 78/255, 163/255)
     matplotlib.colors.ColorConverter.colors['l'] = \
             (255/255, 127/255, 0/255)
-
     #lighter
     matplotlib.colors.ColorConverter.colors['fl'] = \
             (166/255, 206/255,227/255)
@@ -70,7 +71,23 @@ def PlotOptions(uselatex=False, ticks='out'):
             (202/255, 178/255, 214/255)
     matplotlib.colors.ColorConverter.colors['ll'] = \
             (253/255, 191/255, 111/255)
+    
 
+    # POSTDOC COLORMAP
+    matplotlib.colors.ColorConverter.colors['ff'] = \
+            (68/255, 119/255, 170/255)
+    matplotlib.colors.ColorConverter.colors['hh'] = \
+            (238/255, 102/255, 119/255)
+    matplotlib.colors.ColorConverter.colors['ii'] = \
+            (34/255, 136/255, 51/255)
+    matplotlib.colors.ColorConverter.colors['jj'] = \
+            (204/255, 187/255, 68/255)
+    matplotlib.colors.ColorConverter.colors['ll'] = \
+            (102/255, 204/255, 238/255)    
+    matplotlib.colors.ColorConverter.colors['mm'] = \
+            (170/255, 51/255, 119/255)    
+    matplotlib.colors.ColorConverter.colors['nn'] = \
+            (187/255, 187/255, 187/255)   
     if uselatex:
         matplotlib.rc('text', usetex=True)
         matplotlib.rc('font', family='serif')
@@ -151,53 +168,8 @@ class HistRCToggle:
 
 blue = '#9999ff'
 red = '#ff9999'
-'''
-def histogram(ax, data1=None, data2=None, color1=blue, color2=red,
-              bins=20, range=None, alpha=1., label1=None, label2=None):
-    """ Function to display a pretty histogram of up to two different
-    distributions. Approximates transparency to get around annoying
-    issue of pdflatex and matplotlib. """
 
-    from mimic_alpha import colorAlpha_to_rgb
-    weights1 = np.ones_like(data1)/len(data1)
 
-    hist1 = ax.hist(data1, range=range, bins=bins, weights=weights1,
-                    facecolor=color1, edgecolor='white', label=label1)
-    ax.spines['right'].set_color('none')
-    ax.spines['top'].set_color('none')
-    ax.xaxis.set_ticks_position('bottom')
-    ax.spines['bottom'].set_position(('axes', -0.05))
-    ax.yaxis.set_ticks_position('left')
-    ax.spines['left'].set_position(('axes', -0.05))
-    if range:
-        ax.set_xlim([range[0]*(1-1E-3), range[1]*(1+1E-3)])
-    ax.xaxis.grid(False)
-    ax.yaxis.grid(False)
-
-    if data2 is not None:
-        weights2 = np.ones_like(data2)/len(data2)
-        c2_on_w = colorAlpha_to_rgb(color2, alpha=0.5, bg='w')[0]
-        c2_on_c1 = colorAlpha_to_rgb(color2, alpha=0.5, bg=color1)[0]
-
-        hist2 = ax.hist(data2, range=range, bins=bins, weights=weights2,
-                        facecolor=c2_on_w, edgecolor='white',
-                        label=label2)
-
-        ax.legend(loc='upper left')
-
-        orders = hist2[0] > hist1[0]
-        for i, order in enumerate(orders):
-            if order:
-                hist1[-1][i].set_facecolor(c2_on_c1)
-                hist1[-1][i].set_zorder(2)
-            else:
-                hist2[-1][i].set_facecolor(c2_on_c1)
-        return (hist1, hist2)
-
-    else:
-        ax.legend(loc='upper left')
-        return hist1
-'''
 def boxplot(ax, data, color='k', sym='b.'):
     """ Create a nice-looking boxplot with the data in data. Columns
     should be the different samples. sym handles the outlier mark,
