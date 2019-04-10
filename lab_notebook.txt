@@ -8,3 +8,8 @@ Finished writing the data imports. Next up we need to get the data processed in 
 -Sine fitting for r/g/t/h
 -Wavelet for r/g/t/h
 - Try same for activity but I doubt it works. Might need another method.
+
+4/8
+- Worked for all, pretty much. Time to now use wavelets for r/g/t/h/w to assign an
+  instantaneous phase and period.
+- Probably get wavelets from Daniel's code.

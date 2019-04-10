@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Dec 12 2017
+Created on Mon April 1 2019
 
 @author: john abel
-Module set up to perform analysis for Yongli Shan.
+
+Module set up to perform analysis for whole-body circadian recordings
+by Yongli Shan.
+
+Wavelet code used from Peter St. John.
 """
 from __future__ import division
 
@@ -492,9 +496,68 @@ class WholeBodyRecording(object):
             act_sin['params'] = rparams
             self.sinusoids['act'] = act_sin
 
+    def continuous_wavelet_transform(self, data='es', shortestperiod=5, longestperiod=40, nvoice=512, be=5):
+        """
+        Gives CWT, phase, and period for all data marked with the data label.
+        Tries to find r/g/t/h/a and applies CWT to each.
+        """
+
+        self.cwt = {}
+        # imaging data
+        for datatype in ['gyr_'+data, 'ryr_'+data]:
+            x = self.imaging['xr_UT']
+            try:
+                y = self.imaging[datatype]
+                cwt = blu.continuous_wavelet_transform(x,y,shortestperiod=shortestperiod, longestperiod=longestperiod, nvoice=nvoice, be=be)
+                self.cwt[datatype] = cwt
+            except:
+                print "CWT not performed for "+datatype
+                pass
+
+        # t/h data
+        for datatype in ['temp_'+data, 'hum_'+data]:
+            x = self.TH['x_UT']
+            try:
+                y = self.TH[datatype]
+                cwt = blu.continuous_wavelet_transform(x,y,shortestperiod=shortestperiod, longestperiod=longestperiod, nvoice=nvoice, be=be)
+                self.cwt[datatype] = cwt
+            except:
+                print "CWT not performed for "+datatype
+                pass
+
+        try:
+            x = self.activity['x_UT']
+            y = self.activity['activity_es']
+            cwt = blu.continuous_wavelet_transform(x,y,shortestperiod=shortestperiod, longestperiod=longestperiod, nvoice=nvoice, be=be)
+            self.cwt['activity_es'] = cwt
+        except:
+            pass
+
+    def plot_cwt_simple(self, dname='temp_es', name='', ax=None, colorbar=True, legend=True):
+        """
+        A simple plot of the CWT
+        """
+        if ax is None:
+            ax = plt.subplot()
+
+        if not hasattr(self, 'cwt'):
+            self.continuous_wavelet_transform()
+
+        cb = ax.pcolormesh(self.cwt[dname]['x'], self.cwt[dname]['tau'], 
+                      self.cwt[dname]['cwt_scale'], cmap='jet')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Period')
+        ax.plot(self.cwt[dname]['x'], self.cwt[dname]['period'], c='k',
+                label='CWT Tau '+name)
+        if colorbar:
+            plt.colorbar(cb)
+        if legend:
+            plt.legend()
+        return ax
+
+
+
 # functions
-
-
 def hp_detrend(x, y, est_period=24., ret="both", a=0.05):
     """ Detrend the data using a hodrick-prescott filter. If ret ==
     "mean", return the detrended mean of the oscillation. Estimated
