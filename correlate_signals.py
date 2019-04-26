@@ -14,6 +14,7 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 import dateutil
+import minepy
 from datetime import datetime
 from scipy import interpolate, signal, stats
 
@@ -24,7 +25,7 @@ from LocalImports import PlotOptions as plo
 from LocalImports import DecayingSinusoid as ds
 from LocalImports import WholeBodyRecording as wbr
 
-reload(wbr)
+importlib.reload(wbr)
 
 # setup the data
 input_folder = 'Data/M1_030119P2R2GALBWT_Piper1/'
@@ -86,15 +87,20 @@ mouse1.process_imaging_data('xr','ryr','gyr')
 # try the processing of temp/hum data
 mouse1.process_temp_hum_data()
 
-# try the processing of activity data
-mouse1.process_activity_data()
+# try the processing of activity data, with a 15 min bin
+mouse1.process_activity_data(binsize=15)
 
 # try the cwt
 mouse1.continuous_wavelet_transform()
 
-
-
-
+# let's see how phases change over time
+plt.figure()
+plt.plot(mouse1.cwt['activity_es']['x'], np.cos(mouse1.cwt['activity_es']['phase']), label='Activity')
+plt.plot(mouse1.cwt['gyr_es']['x'], np.cos(mouse1.cwt['gyr_es']['phase']), label='Green - Liver')
+plt.plot(mouse1.cwt['ryr_es']['x'], np.cos(mouse1.cwt['ryr_es']['phase']), label='Red - Muscle')
+plt.label('Time (h)')
+plt.xticks([0,24,48,72,96,120,144,168,192,216,240,264,288])
+plt.ylabel('Cos($\phi$), Continuous Wavelet Transform')
 
 # now - let's try the correlations
 def correlate_signals(t1, d1, t2, d2, metric='pearsonr', max_dist=0.25, return_downsampled_trajectories=False):
@@ -153,7 +159,9 @@ def correlate_signals(t1, d1, t2, d2, metric='pearsonr', max_dist=0.25, return_d
         if metric=='pearsonr':
             corr = stats.pearsonr(ref_d_match, rel_d_match)
         elif metric=='mic':
-            corr = 0
+            mm = mp.mine()
+            mm.compute_score(ref_d_match, rel_d_match)
+            corr = mm.mic()
 
 
         if return_downsampled_trajectories:

@@ -144,7 +144,7 @@ class WholeBodyRecording(object):
                 imgstart = dp.to_datetime(start_time)
             except:
                 imgstart = pd.to_datetime('2010-01-01 00:00:00')
-                print "Date format not understood, leaving all times."
+                print("Date format not understood, leaving all times.")
         idx = np.where(xth>=imgstart)[0][0]
         xthr = xth[idx:]
         tempr = np.array(TH_pd['temp'], dtype=np.float)[idx:]
@@ -161,7 +161,8 @@ class WholeBodyRecording(object):
         TH['offset_h'] = offset.total_seconds()/60/60
         self.TH = TH
 
-    def import_actogram(self, filename, start_time='imaging', actogram_interval=1):
+    def import_actogram(self, filename, start_time='imaging', actogram_interval=1,
+                        binsize=None):
         """
         Imports the actogram file at filename.
 
@@ -184,7 +185,7 @@ class WholeBodyRecording(object):
                 imgstart = dp.to_datetime(start_time)
             except:
                 imgstart = pd.to_datetime('2010-01-01 00:00:00')
-                print "Date format not understood, leaving all times."
+                print("Date format not understood, leaving all times.")
 
         # assemble all the columns
         intervals = int(60/actogram_interval*24)*total_days
@@ -202,11 +203,14 @@ class WholeBodyRecording(object):
         xar = xar[~np.isnan(actr)]
         actr = actr[~np.isnan(actr)]
 
+        interval_h = actogram_interval/60
+        offset_h = offset.total_seconds()/60/60
+
         activity = {}
         activity['x'] = xar
         activity['activity'] = actr
-        activity['interval_h'] = actogram_interval/60
-        activity['offset_h'] = offset.total_seconds()/60/60
+        activity['interval_h'] = interval_h
+        activity['offset_h'] = offset_h
         self.activity = activity
 
 
@@ -419,13 +423,17 @@ class WholeBodyRecording(object):
             hum_sin['params'] = gparams
             self.sinusoids['hum'] = hum_sin
 
-    def process_activity_data(self, xname='x', actname='activity', lsperiod_fit=False):
+    def process_activity_data(self, xname='x', actname='activity', lsperiod_fit=False,                      binsize=None):
         """
         Performs the analysis of the activity data. The xname, actname
         arguments tell which of the dict to look at.
 
         If lsperiod_fit, bounds the resulting sinusoid to have a 
         period within 1h of LSPgram.
+
+        If binning is given, the data are binned into 'binsize' x act interval 
+        intervals. The circadian phase error for 15-min bins is at most 
+        0.065 rad.
         """
         x = self.activity[xname]
         act = self.activity[actname]
@@ -434,8 +442,24 @@ class WholeBodyRecording(object):
         timediffs = [x[i+1]-x[i] for i in range(len(x)-1)]
         timediffs_h = [td.total_seconds()/60/60 for td in timediffs]
         times = np.hstack([0,np.cumsum(timediffs_h)]) +self.activity['offset_h']
+
+        # bin the data if binning
+        if type(binsize) is int:
+            new_times = times[::binsize]
+            bins = new_times
+            digitized = np.digitize(times, bins)
+            new_act = np.array([act[digitized == i].sum()
+                            for i in range(1, len(bins))])
+            # re-assign
+            act = new_act
+            times = new_times[1:] # time at *end* of bin
+            self.activity[actname+'_b'] = act
+
+
+
         self.activity[xname+'_UT'] = times
 
+        # get and remove baseline
         actb = np.mean(act)
         act_zero = act-actb
 
@@ -496,7 +520,7 @@ class WholeBodyRecording(object):
             act_sin['params'] = rparams
             self.sinusoids['act'] = act_sin
 
-    def continuous_wavelet_transform(self, data='es', shortestperiod=5, longestperiod=40, nvoice=512, be=5):
+    def continuous_wavelet_transform(self, data='es', shortestperiod=16, longestperiod=32, nvoice=512, be=5):
         """
         Gives CWT, phase, and period for all data marked with the data label.
         Tries to find r/g/t/h/a and applies CWT to each.
@@ -511,7 +535,7 @@ class WholeBodyRecording(object):
                 cwt = blu.continuous_wavelet_transform(x,y,shortestperiod=shortestperiod, longestperiod=longestperiod, nvoice=nvoice, be=be)
                 self.cwt[datatype] = cwt
             except:
-                print "CWT not performed for "+datatype
+                print("CWT not performed for "+datatype)
                 pass
 
         # t/h data
@@ -522,10 +546,12 @@ class WholeBodyRecording(object):
                 cwt = blu.continuous_wavelet_transform(x,y,shortestperiod=shortestperiod, longestperiod=longestperiod, nvoice=nvoice, be=be)
                 self.cwt[datatype] = cwt
             except:
-                print "CWT not performed for "+datatype
+                print("CWT not performed for "+datatype)
                 pass
 
+        # activity data
         try:
+            # throws an optimization error
             x = self.activity['x_UT']
             y = self.activity['activity_es']
             cwt = blu.continuous_wavelet_transform(x,y,shortestperiod=shortestperiod, longestperiod=longestperiod, nvoice=nvoice, be=be)

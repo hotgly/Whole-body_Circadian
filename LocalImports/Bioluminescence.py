@@ -608,6 +608,7 @@ def continuous_wavelet_transform(x, y, shortestperiod=20,
 
     return_dict = {
         'x'         : x,
+        'y'         : y,
         'tau'       : tau,
         'cwt'       : wt,
         'cwt_abs'   : cwt_abs,
@@ -745,7 +746,7 @@ def cwt(y, fs, ga=3, be=7, opt_b='exp_sin', opt_m='ban'):
     iT = W.multiply(X)
 
 
-    T = np.fft.ifft(iT.todense(), axis=0)[index, :]
+    T = np.fft.ifft(iT.todense(), axis=0)[index.astype(int), :]
 
     return T.T
 
@@ -807,7 +808,7 @@ def extend(x_end, y_end, length):
     end_len = len(x_end)
     period = (x_end[-1] - x_end[0])/2
     dx = (x_end[-1] - x_end[0])/(end_len - 1)
-    extnum = length + end_len
+    extnum = int(length + end_len)
     x_ext = np.linspace(x_end[0], x_end[0] + extnum*dx, num=extnum,
                         endpoint=False)
 
