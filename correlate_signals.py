@@ -95,12 +95,19 @@ mouse1.continuous_wavelet_transform()
 
 # let's see how phases change over time
 plt.figure()
-plt.plot(mouse1.cwt['activity_es']['x'], np.cos(mouse1.cwt['activity_es']['phase']), label='Activity')
-plt.plot(mouse1.cwt['gyr_es']['x'], np.cos(mouse1.cwt['gyr_es']['phase']), label='Green - Liver')
-plt.plot(mouse1.cwt['ryr_es']['x'], np.cos(mouse1.cwt['ryr_es']['phase']), label='Red - Muscle')
-plt.label('Time (h)')
+plt.plot(mouse1.cwt['activity_es']['x'], np.cos(mouse1.cwt['activity_es']['phase']), 'k', label='Activity')
+#plt.plot(mouse1.cwt['temp_es']['x'], np.cos(mouse1.cwt['temp_es']['phase']), 'b', label='Temperature')
+plt.plot(mouse1.cwt['ryr_es']['x'], np.cos(mouse1.cwt['ryr_es']['phase']), 'r:', label='Red - Muscle')
+# only plot where green is circadian
+good_green = np.where(np.logical_and(mouse1.cwt['gyr_es']['period']>20, 
+                      mouse1.cwt['gyr_es']['period']<28))[0]
+plt.plot(mouse1.cwt['gyr_es']['x'][good_green], np.cos(mouse1.cwt['gyr_es']['phase'][good_green]), 'g--', label='Green - Liver')
+plt.xlabel('Time (h)')
 plt.xticks([0,24,48,72,96,120,144,168,192,216,240,264,288])
 plt.ylabel('Cos($\phi$), Continuous Wavelet Transform')
+plt.ylim([-1,1.5])
+plt.legend()
+plt.tight_layout(**plo.layout_pad)
 
 # now - let's try the correlations
 def correlate_signals(t1, d1, t2, d2, metric='pearsonr', max_dist=0.25, return_downsampled_trajectories=False):
